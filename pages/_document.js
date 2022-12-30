@@ -45,6 +45,8 @@ export default class MyDocument extends Document {
           <meta property="twitter:title" content="XIRR Calculator 📈" />
           <meta property="twitter:description" content="" />
           <meta property="twitter:image" content="static/images/logo.png" />
+
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         </Head>
         <body>
           <Main />

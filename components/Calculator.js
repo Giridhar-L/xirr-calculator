@@ -2,10 +2,13 @@ import { useCallback, useState, useRef } from 'react';
 import Alert from './atoms/Alert';
 import FileItem from './atoms/FileItem';
 import InputSection from './atoms/InputSection';
+import StocksTable from './StocksTable';
 import parseCsvFiles from '../utils/parseCsvFiles';
 import getCashflow from '../utils/getCashflow';
-import calculateXIRR from '../utils/calculateXIRR';
+import calculateXIRR, { calculateXIRRBySymbol } from '../utils/calculateXIRR';
 import validateTrades from '../utils/validateTrades';
+import getCashflowsBySymbol from '../utils/getCashflowBySymbol';
+import getPrices from '../utils/getPrices';
 
 const errorMap = {
   CURRENT_VALUE_REQUIRED: 'Portfolio value must be provided. If you don\'t have any holdings, enter 0',
@@ -22,11 +25,14 @@ export default function Calculator({ id }) {
   const [csvFiles, updateCsvFiles] = useState([]);
   const [err, updateErr] = useState({});
   const [xirr, updateXirr] = useState(null);
+  const [xirrBySymbol, updateXirrBySymbol] = useState(null);
+
   const fileInputRef = useRef(null);
   const valuationInputRef = useRef(null);
+  const chartRef = useRef(null);
 
   // removes duplicate files in uploaded/dropped files
-  const processFileSubmit =  useCallback((files) => {
+  const processFileSubmit = useCallback((files) => {
     const _csvFiles = [...csvFiles];
     files.forEach(newFile => {
       const searchIndex = csvFiles.findIndex(existingFile => existingFile.name === newFile.name);
@@ -98,7 +104,7 @@ export default function Calculator({ id }) {
       return;
     }
     const xirr = calculateXIRR(cashflow, parseInt(currentValuation, 10));
-    if(isNaN(xirr)) {
+    if (isNaN(xirr)) {
       updateErr(err => ({
         ...err,
         tradeFileErr: {
@@ -108,6 +114,14 @@ export default function Calculator({ id }) {
       }))
     }
     updateXirr(xirr);
+    
+    const cashflowsBySymbol = getCashflowsBySymbol[broker](trades);
+    let symbols = Object.keys(cashflowsBySymbol)
+    const priceBySymbol = await getPrices(symbols)
+    const xirrBySymbol = calculateXIRRBySymbol(cashflowsBySymbol, priceBySymbol);
+    updateXirrBySymbol(xirrBySymbol)
+    console.log(xirrBySymbol);
+    
     updateIsCalculating(false);
   }, [csvFiles]);
 
@@ -121,8 +135,10 @@ export default function Calculator({ id }) {
     updateCsvFiles([]);
     valuationInputRef.current.value = '';
     fileInputRef.current.value = '';
+    chartRef.current.value = '';
     updateIsCalculating(false);
     updateXirr(null);
+    updateXirrBySymbol(null);
   }, [updateErr, updateCsvFiles, updateIsCalculating, valuationInputRef, updateXirr])
 
   return (
@@ -168,9 +184,9 @@ export default function Calculator({ id }) {
           tabIndex="0"
           onDrop={onDropHandler}
           onDragOver={dragOverHandler}
-          onClick={()=>{fileInputRef.current.click()}}
+          onClick={() => { fileInputRef.current.click() }}
           role="button"
-          onKeyPress={()=>{fileInputRef.current.click()}}
+          onKeyPress={() => { fileInputRef.current.click() }}
         >
           <img height="52" src="../static/images/file-upload.svg" className="mb-4" />
           <span className="text-center">drag and drop here or click to browse</span>
@@ -240,6 +256,20 @@ export default function Calculator({ id }) {
           {`Your portfolio has XIRR of ${xirr}%`}
         </Alert>
       )}
+
+      {xirrBySymbol && !isCalculating && (
+        <StocksTable 
+          xirrBySymbol={xirrBySymbol}
+          id={id}
+        />
+      )}
+      {/* Declaring div before the chart object is created in StocksTable component */}
+      <div 
+        style={{display: (xirrBySymbol && !isCalculating) ? 'block' : 'none' }} 
+        className="shadow-lg rounded-lg overflow-hidden">
+        <div className="py-3 px-5 bg-gray-50">XIRR Distribution</div>
+        <canvas ref={chartRef}className="p-10" id="chartBar"></canvas>
+      </div>
     </form>
   );
 }
